@@ -24,7 +24,7 @@ setuptools.setup(
     version=__pkginfo__['__version__'],
     author="Julian Fleischer",
     author_email="tirednesscankill@warhog.net",
-    description="extra utilities for pyspark",
+    description="extra utilities for pyspark.sql",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/scravy/pysparkextra",
