@@ -30,7 +30,7 @@ class ArrowsTestCase(unittest.TestCase):
                 split(lt('foo', 0)),
                 both(
                     drop_col('bar'),
-                    select((col('foo') + 1).alias('foo'), col('bar')),
+                    with_cols(foo=col('foo') + 1),
                 ),
                 union,
             )
