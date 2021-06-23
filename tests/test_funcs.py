@@ -79,6 +79,26 @@ class SparkFuncsTestCase(SparkTest):
             [[c for c in r] for r in df.collect()],
         )
 
+    def test_and(self):
+        df1, *_ = self.make_dfs()
+
+        row, = df1.filter(AND(
+            neq("foo", 0),
+            neq("foo", 1),
+            neq("foo", 2),
+        )).collect()
+        self.assertEqual(3, row[0])
+
+    def test_or(self):
+        df1, *_ = self.make_dfs()
+
+        row, = df1.filter(OR(
+            eq("foo", 0),
+            eq("foo", 1),
+            eq("foo", 2),
+        )).collect()
+        self.assertEqual(1, row[0])
+
 
 if __name__ == '__main__':
     unittest.main()

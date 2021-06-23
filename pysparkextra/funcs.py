@@ -114,7 +114,7 @@ def AND(*args: Union[Iterable[Column], Column]) -> Column:
             columns.extend(arg)
     if not columns:
         return lit(False)
-    return reduce(lambda c1, c2: c1 & c2, columns)
+    return reduce(Column.__and__, columns)
 
 
 # noinspection PyPep8Naming
@@ -127,7 +127,7 @@ def OR(*args: Union[Iterable[Column], Column]) -> Column:
             columns.extend(arg)
     if not columns:
         return lit(True)
-    return reduce(lambda c1, c2: c1 | c2, columns)
+    return reduce(Column.__or__, columns)
 
 
 @curried
