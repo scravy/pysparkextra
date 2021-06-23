@@ -4,9 +4,10 @@ from pyspark.sql import SparkSession
 
 from pysparkextra.arrows import *
 from pysparkextra.funcs import *
+from pysparkextra.unittestcase import SparkTest
 
 
-class ArrowsTestCase(unittest.TestCase):
+class ArrowsTestCase(SparkTest):
     spark_session: SparkSession
 
     @classmethod
@@ -28,7 +29,7 @@ class ArrowsTestCase(unittest.TestCase):
             ),
             pipe(
                 split(lt('foo', 0)),
-                both(
+                parallel(
                     drop_col('bar'),
                     with_cols(foo=col('foo') + 1),
                 ),

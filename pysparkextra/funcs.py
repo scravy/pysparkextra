@@ -27,7 +27,8 @@ def lit_or_col(c: Union[str, Column, Number]) -> Column:
     return col(c)
 
 
-def not_(c: Column) -> Column:
+# noinspection PyPep8Naming
+def NOT(c: Column) -> Column:
     # noinspection PyUnresolvedReferences
     return ~c
 
@@ -47,6 +48,10 @@ def with_cols(**kwargs: Column) -> Callable[[DataFrame], DataFrame]:
 
 def drop_col(*names: str) -> Callable[[DataFrame], DataFrame]:
     return lambda df: df.drop(*names)
+
+
+def rename_col(old_name: str, new_name: str) -> Callable[[DataFrame], DataFrame]:
+    return lambda df: df.withColumnRenamed(old_name, new_name)
 
 
 @curried
@@ -84,7 +89,7 @@ def union(*dfs: Union[Iterable[DataFrame], DataFrame]) -> Optional[DataFrame]:
 def split(condition: Column, df: DataFrame) -> Tuple[DataFrame, DataFrame]:
     c = "_condition"
     df = df.withColumn(c, fn.coalesce(condition, lit(False))).cache()
-    return df.filter(col(c)).drop(c), df.filter(not_(col(c))).drop(c)
+    return df.filter(col(c)).drop(c), df.filter(NOT(col(c))).drop(c)
 
 
 # noinspection PyPep8Naming
@@ -166,19 +171,15 @@ def is_null(c: Union[str, Column]) -> Column:
 
 
 def is_nonzero(c: Union[str, Column]) -> Column:
-    return col(c).isNotNull() & (col(c) != 0)
-
-
-def is_nonemptystr(c: Union[str, Column]) -> Column:
-    return col(c).isNotNull() & (col(c) != lit(''))
-
-
-def is_nonemptynum(c: Union[str, Column]) -> Column:
     return col(c).isNotNull() & (col(c) != lit(0))
 
 
 def is_empty(c: Union[str, Column]) -> Column:
     return col(c).isNull() | (col(c).cast(StringType()) == lit(''))
+
+
+def is_nonempty(c: Union[str, Column]) -> Column:
+    return NOT(c)
 
 
 def is_zero(c: Union[str, Column]) -> Column:
