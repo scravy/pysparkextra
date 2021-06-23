@@ -74,6 +74,13 @@ def union2(df1: DataFrame, df2: DataFrame) -> DataFrame:
 
 
 def union(*dfs: Union[Iterable[DataFrame], DataFrame]) -> Optional[DataFrame]:
+    """
+    Unions all the given dataframes. Like unionByName as it does not care about column order.
+    If any dataframe lacks any column that some other dataframe has it is filled with NULL
+    values for that dataframe. This way you can union even dataframes which have different
+    number of columns.
+    """
+
     all_dfs: List[DataFrame] = list()
     for df in dfs:
         if isinstance(df, DataFrame):
@@ -86,9 +93,14 @@ def union(*dfs: Union[Iterable[DataFrame], DataFrame]) -> Optional[DataFrame]:
 
 
 @curried
-def split(condition: Column, df: DataFrame) -> Tuple[DataFrame, DataFrame]:
+def split(predicate: Column, df: DataFrame) -> Tuple[DataFrame, DataFrame]:
+    """
+    Creates two DataFrames from one DataFrame: One where every row fulfills the given predicate,
+    one which contains all the remaining rows.
+    """
+
     c = "_condition"
-    df = df.withColumn(c, fn.coalesce(condition, lit(False))).cache()
+    df = df.withColumn(c, fn.coalesce(predicate, lit(False))).cache()
     return df.filter(col(c)).drop(c), df.filter(NOT(col(c))).drop(c)
 
 
