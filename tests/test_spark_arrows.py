@@ -1,23 +1,11 @@
 import unittest
 
-from pyspark.sql import SparkSession
-
 from pysparkextra.arrows import *
 from pysparkextra.funcs import *
 from pysparkextra.unittestcase import SparkTest
 
 
 class ArrowsTestCase(SparkTest):
-    spark_session: SparkSession
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.spark_session = SparkSession.builder.getOrCreate()
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.spark_session.stop()
-
     def test_flow(self):
         df: DataFrame = apply(
             self.spark_session.createDataFrame(
