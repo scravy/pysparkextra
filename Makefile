@@ -2,7 +2,7 @@ test: lint
 	python3 -m unittest -v
 
 lint:
-	pylint --disable=C,R,W pysparkextra
+	pylint --disable=C,R,W --signature-mutators=pysparkextra.util.curried pysparkextra
 
 venv:
 	python3 -m venv .venv

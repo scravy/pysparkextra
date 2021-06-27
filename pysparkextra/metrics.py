@@ -15,12 +15,14 @@ class Listener:
         self._metrics: Dict[str, Number] = {}
 
     def onSuccess(self, _funcname, qe, _durationns):
-        m = qe.executedPlan().metrics()
-        ks: JavaObject = m.keys().iterator()
-        ks: JavaIterator = self._gateway.jvm.scala.collection.JavaConverters.asJavaIterator(ks)
-        for k in ks:
-            self._metrics[k] = m.get(k).value().value()
-        self._barrier.release()
+        try:
+            m = qe.executedPlan().metrics()
+            ks: JavaObject = m.keys().iterator()
+            ks: JavaIterator = self._gateway.jvm.scala.collection.JavaConverters.asJavaIterator(ks)
+            for k in ks:
+                self._metrics[k] = m.get(k).value().value()
+        finally:
+            self._barrier.release()
 
     def onFailure(self, _funcname, _qe, _durationns):
         self._barrier.release()
@@ -31,10 +33,11 @@ class Listener:
 
 # noinspection PyProtectedMember
 class SparkMetrics:
-    def __init__(self, spark: SparkSession):
+    def __init__(self, spark: SparkSession, timeout: float = 15):
         self._spark = spark
         self._semaphore = threading.Semaphore(0)
         self._listener = Listener(spark.sparkContext._gateway, self._semaphore)
+        self._timeout = timeout
 
     def __enter__(self) -> Dict[str, Number]:
         gateway = self._spark.sparkContext._gateway
@@ -45,5 +48,5 @@ class SparkMetrics:
         return self._listener._metrics
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._semaphore.acquire()
+        self._semaphore.acquire(timeout=self._timeout)
         self._spark._jsparkSession.listenerManager().unregister(self._listener)
