@@ -1,12 +1,16 @@
+import os
+import typing
 from functools import reduce
 from numbers import Number
 from typing import Union, List, Iterable, Optional, Callable, Tuple
 
 import pyspark.sql.functions as fn
-from pyspark.sql import DataFrame, Column
+from pyspark import SparkContext
+from pyspark.sql import DataFrame, Column, SparkSession
 from pyspark.sql.types import StringType
 
-from pysparkextra.util import curried
+from .arrows import apply
+from .util import curried, read_varargs
 
 
 def col(c: Union[str, Column]) -> Column:
@@ -33,8 +37,16 @@ def NOT(c: Column) -> Column:
     return ~c
 
 
-def select(*cs: Column) -> Callable[[DataFrame], DataFrame]:
+def select(*cs: Union[Union[str, Column], Iterable[Union[str, Column]]]) -> Callable[[DataFrame], DataFrame]:
+    cs = [col(c) for c in read_varargs(cs, (str, Column))]
     return lambda df: df.select(*cs)
+
+
+def group_agg(*dimensions: Union[Union[str, Column], Iterable[Union[str, Column]]], **metrics: Column) -> \
+        Callable[[DataFrame], DataFrame]:
+    return lambda df: df \
+        .groupBy(*(col(c) for c in read_varargs(dimensions, (str, Column)))) \
+        .agg(*(v.alias(k) for k, v in metrics.items()))
 
 
 @curried
@@ -47,6 +59,7 @@ def with_cols(**kwargs: Column) -> Callable[[DataFrame], DataFrame]:
 
 
 def drop_col(*names: str) -> Callable[[DataFrame], DataFrame]:
+    names = read_varargs(names, str)
     return lambda df: df.drop(*names)
 
 
@@ -73,7 +86,7 @@ def union2(df1: DataFrame, df2: DataFrame) -> DataFrame:
     return df1.select(*df1_selection).union(df2.select(*df2_selection))
 
 
-def union(*dfs: Union[Iterable[DataFrame], DataFrame]) -> Optional[DataFrame]:
+def union(*dfs: Union[DataFrame, Iterable[DataFrame]]) -> Optional[DataFrame]:
     """
     Unions all the given dataframes. Like unionByName as it does not care about column order.
     If any dataframe lacks any column that some other dataframe has it is filled with NULL
@@ -81,12 +94,7 @@ def union(*dfs: Union[Iterable[DataFrame], DataFrame]) -> Optional[DataFrame]:
     number of columns.
     """
 
-    all_dfs: List[DataFrame] = list()
-    for df in dfs:
-        if isinstance(df, DataFrame):
-            all_dfs.append(df)
-        else:
-            all_dfs.extend(df)
+    all_dfs: List[DataFrame] = read_varargs(dfs, DataFrame)
     if not all_dfs:
         return None
     return reduce(union2, all_dfs)
@@ -104,14 +112,82 @@ def split(predicate: Column, df: DataFrame) -> Tuple[DataFrame, DataFrame]:
     return df.filter(col(c)).drop(c), df.filter(NOT(col(c))).drop(c)
 
 
+# noinspection PyUnresolvedReferences
+def count(c: Union[None, str, Column] = None) -> Column:
+    if c is None:
+        return fn.count(lit(1))  # pylint: disable=E1101
+    return fn.count(col(c))  # pylint: disable=E1101
+
+
+def spark_session(df: DataFrame) -> SparkSession:
+    return df.sql_ctx.sparkSession
+
+
+def spark_context(df: DataFrame) -> SparkContext:
+    # noinspection PyProtectedMember
+    return df.sql_ctx._sc
+
+
+def num_executors(ss: SparkSession) -> int:
+    """
+    Discovers the number of executors. If there are no executors it is assumed that we're
+    running a local spark master which may utilize all local cores.
+    """
+    # noinspection PyProtectedMember
+    sc = ss._jsc.sc()
+    num = len([executor for executor in sc.statusTracker().getExecutorInfos()]) - 1  # driver is also returned
+    if num == 0:
+        num = os.cpu_count()
+    return num
+
+
+def repartition(num_partition: int, *cols: Union[str, Column]) -> Callable[[DataFrame], DataFrame]:
+    return lambda df: df.repartition(num_partition, *cols)
+
+
+def count_partitions(df: DataFrame):
+    return apply(df, group_agg(fn.spark_partition_id(), count=count()))
+
+
+def collect(df: DataFrame):
+    return df.collect()
+
+
+def estimate_size(df: DataFrame) -> Tuple[DataFrame, int]:
+    """
+    https://stackoverflow.com/questions/49492463/compute-size-of-spark-dataframe-sizeestimator-gives-unexpected-results
+    """
+    cf = df.cache()
+    cf.foreach(lambda x: x)
+    # noinspection PyProtectedMember
+    catalyst_plan = df._jdf.queryExecution().logical()
+    # noinspection PyProtectedMember
+    s = spark_session(cf)._jsparkSession.sessionState().executePlan(catalyst_plan).optimizedPlan().stats().sizeInBytes()
+    return cf, s
+
+
+# noinspection PyTypeChecker
+@typing.overload
+def print_df(df: None = None, n=20, truncate=True, vertical=False) -> Callable[[DataFrame], DataFrame]:
+    pass
+
+
+def print_df(df: DataFrame = None, n=20, truncate=True, vertical=False) -> DataFrame:
+    if df is None:
+        # noinspection PyTypeChecker
+        return lambda f: print_df(f, n=n, truncate=truncate, vertical=vertical)
+    df.show(n=n, truncate=truncate, vertical=vertical)
+    return df
+
+
+def print_schema(df: DataFrame) -> DataFrame:
+    df.printSchema()
+    return df
+
+
 # noinspection PyPep8Naming
-def AND(*args: Union[Iterable[Column], Column]) -> Column:
-    columns: List[Column] = list()
-    for arg in args:
-        if isinstance(arg, Column):
-            columns.append(arg)
-        else:
-            columns.extend(arg)
+def AND(*args: Union[Column, Iterable[Column]]) -> Column:
+    columns: List[Column] = read_varargs(args, Column)
     if not columns:
         return lit(False)
     return reduce(Column.__and__, columns)

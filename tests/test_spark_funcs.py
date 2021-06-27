@@ -99,6 +99,37 @@ class SparkFuncsTestCase(SparkTest):
         )).collect()
         self.assertEqual(1, row[0])
 
+    def test_count_partitions(self):
+        result = apply(
+            self.spark_session.createDataFrame(
+                [
+                    *([[1, 2]] * 200),
+                    [3, 4],
+                    [5, 6],
+                    [7, 8],
+                    [9, 10],
+                    [11, 12],
+                ], schema=("foo", "bar")
+            ),
+            pipe(
+                repartition(2),
+                count_partitions,
+                print_df,
+                collect,
+            )
+        )
+        self.assertEqual(2, len(result))
+
+    def test_estimate_size(self):
+        df, size = apply(
+            self.spark_session.createDataFrame(
+                [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12]] * 100,
+                schema=("foo", "bar")
+            ),
+            estimate_size,
+        )
+        print(size)
+
 
 if __name__ == '__main__':
     unittest.main()

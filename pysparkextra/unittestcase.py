@@ -2,6 +2,8 @@ import unittest
 
 from pyspark.sql import SparkSession
 
+from pysparkextra import spark
+
 
 class SparkTest(unittest.TestCase):
 
@@ -9,7 +11,7 @@ class SparkTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.spark_session = SparkSession.builder.getOrCreate()
+        cls.spark_session = spark()
 
     @classmethod
     def tearDownClass(cls) -> None:
