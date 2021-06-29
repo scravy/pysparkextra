@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 # noinspection PyPep8Naming
 class Listener:
-    def __init__(self, gateway, barrier: threading.Semaphore):
+    def __init__(self, gateway):
         self._gateway = gateway
-        self._barrier = barrier
-        self._metrics: Dict[str, Number] = {}
+        self.semaphore = threading.Semaphore(0)
+        self.metrics: Dict[str, Number] = {}
 
     def onSuccess(self, _funcname, qe, _durationns):
         try:
@@ -24,12 +24,12 @@ class Listener:
             ks: JavaObject = m.keys().iterator()
             ks: JavaIterator = self._gateway.jvm.scala.collection.JavaConverters.asJavaIterator(ks)
             for k in ks:
-                self._metrics[k] = m.get(k).value().value()
+                self.metrics[k] = m.get(k).value().value()
         finally:
-            self._barrier.release()
+            self.semaphore.release()
 
     def onFailure(self, _funcname, _qe, _durationns):
-        self._barrier.release()
+        self.semaphore.release()
 
     class Java:
         implements = ["org.apache.spark.sql.util.QueryExecutionListener"]
@@ -39,16 +39,15 @@ class Listener:
 class SparkMetrics:
     def __init__(self, spark: SparkSession, timeout: Optional[float] = 15):
         self._spark = spark
-        self._semaphore = threading.Semaphore(0)
-        self._listener = Listener(spark.sparkContext._gateway, self._semaphore)
+        self._listener = Listener(spark.sparkContext._gateway)
         self._timeout = timeout
 
     def __enter__(self) -> Dict[str, Number]:
         ensure_callback_server_started(self._spark.sparkContext._gateway)
         self._spark._jsparkSession.listenerManager().register(self._listener)
-        return self._listener._metrics
+        return self._listener.metrics
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if not self._semaphore.acquire(timeout=self._timeout):
+        if not self._listener.semaphore.acquire(timeout=self._timeout):
             logger.warning("Did not receive any metrics within %s seconds", self._timeout)
         self._spark._jsparkSession.listenerManager().unregister(self._listener)
